@@ -39,9 +39,11 @@ const result = await exec({
   allowedDomains: ["api.example.com"], // 通信を許可する先
   workdir: "/tmp/session-123",         // 実行をまたいで共有する作業ディレクトリ（読み書きできる）
   readonlyPaths: ["/data/uploads"],    // 読み取りだけ許可するパス
+  env: { API_BASE_URL: "..." },        // コードに見せる環境変数（渡した名前だけ）
   timeoutMs: 30_000,
 });
-// result: { stdout, stderr, exitCode }
+// result: { stdout, stderr, exitCode, timedOut, truncated }
+// 確定した仕様は design.md の「exec の API 仕様」
 ```
 
 ## 脅威モデル
@@ -92,6 +94,12 @@ const result = await exec({
 
 - 通信先をホスト名（とポート）の許可リストで指定できる。既定は全拒否
 - 拡張：パス・メソッド単位の制御、通信ログ、認証ヘッダーの注入（コードに API キーを渡さない）
+
+### 環境変数
+
+- ホストの環境変数は、既定ではコードから見えない
+- 開発者は、コードに見せる環境変数を名前と値で指定できる。ホストの値をそのまま渡すことも、開発者が選んで書けばできる
+- Deno の動き（パッケージのキャッシュ、通信の経路、読み込むライブラリなど）を変える名前は、ほかの制限を黙って壊すので拒否する
 
 ### 資源の制限
 

@@ -2,6 +2,132 @@
 
 要件（[requirements.md](requirements.md)）と背景（[background.md](background.md)）をもとにした設計。PoC で確かめた内容を含む。PoC のコードはブランチ [claude/poc-deno-agentcore](https://github.com/tmokmss/agent-code-sandbox/tree/claude/poc-deno-agentcore/poc) に残してある（マージはしない）。Deno のバージョンは 2.9.7 で確かめた。
 
+## exec の API 仕様（公開契約）
+
+このライブラリの公開する契約。ここに書いたことは、変えるときに利用者への影響を考える。`exec()` を呼ぶのはエージェントを作る開発者のコードで、LLM ではない。なので、開発者が意図して選ぶ設定（広いパスの許可、ホストの環境変数をまとめて渡すなど）は許す。拒否するのは、ほかのオプションの保証を開発者が気づかないうちに壊すものだけにする。
+
+### 関数
+
+```ts
+export function exec(options: ExecOptions): Promise<ExecResult>;
+```
+
+### ExecOptions
+
+```ts
+export type ExecOptions = {
+  code?: string;
+  entrypoint?: string;
+  workdir: string;
+  readonlyPaths?: string[];
+  allowedPackages?: string[];
+  allowedDomains?: string[];
+  env?: Record<string, string>;
+  timeoutMs?: number;
+  memoryMb?: number;
+  maxOutputBytes?: number;
+  signal?: AbortSignal;
+};
+```
+
+| オプション | 既定値 | 意味 |
+|---|---|---|
+| `code` | なし | 実行する JS / TS のコード。`entrypoint` とどちらか一方だけを指定する。ES モジュールとして実行し、トップレベルの `await` を使える。相対 import は `workdir` から解決する |
+| `entrypoint` | なし | `workdir` の中のファイルのパス（`workdir` からの相対パス、または `workdir` の中を指す絶対パス）。`code` とどちらか一方だけを指定する |
+| `workdir` | 必須 | 作業ディレクトリ。存在している必要がある。サンドボックスのコードは読み書きでき、実行をまたいでファイルが残る |
+| `readonlyPaths` | `[]` | 読み取りだけを許可するパス（ディレクトリかファイル） |
+| `allowedPackages` | 指定なし | import してよい npm パッケージ。`"name"` か `"name@range"`（範囲は `*`、`5`、`5.7`、`5.7.0`、`^5.1.0`、`~5.1.0`）。指定しないときはどのパッケージも使える。`[]` はどれも使えない。許可したパッケージの依存は自動で許可する |
+| `allowedDomains` | `[]` | 通信を許可する先。`"api.example.com"`（全ポート）、`"api.example.com:443"`、`"*.example.com"`、IP アドレス。`[]` はすべて拒否する |
+| `env` | `{}` | サンドボックスのコードに見せる環境変数。ここで渡した名前だけを読める。ホストの値を渡すときは `{ KEY: process.env.KEY! }` や `{ ...process.env }` のように開発者が選んで書く |
+| `timeoutMs` | `30000` | 実行時間の上限。超えたら止めて `timedOut: true` を返す。パッケージの取得の時間は含めない |
+| `memoryMb` | `512` | JS のヒープの上限 |
+| `maxOutputBytes` | `20000` | `stdout` と `stderr` のそれぞれの上限（バイト）。超えた分は先頭と末尾を半分ずつ残して真ん中を捨てる |
+| `signal` | なし | 渡した `AbortSignal` が中断されたら、実行を止める。返り値は `timedOut` と同じ形で、`stderr` に中断したことを書く |
+
+### ExecResult
+
+```ts
+export type ExecResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  truncated: boolean;
+  durationMs: number;
+};
+```
+
+| フィールド | 意味 |
+|---|---|
+| `stdout` | 標準出力 |
+| `stderr` | 標準エラー。LLM が直せるように書き換えたもの（[3. エラー時の情報](#3-エラー時にllm-が直せるだけの情報を出す)） |
+| `exitCode` | 終了コード。実行前に拒否したときは `1`。止めたとき（時間切れ、中断）は `null` |
+| `timedOut` | 時間切れか中断で止めたとき `true` |
+| `truncated` | `stdout` か `stderr` を切り詰めたとき `true` |
+| `durationMs` | `exec()` の呼び出しから返るまでの時間 |
+
+### 返すか、例外を投げるか
+
+LLM が直せるものは結果として返し、開発者が直すものは例外を投げる。エージェントは結果をそのまま LLM に渡せばよい。
+
+| 起きたこと | 扱い |
+|---|---|
+| コードの例外、構文の誤り、権限の拒否 | 結果を返す（`exitCode` が 0 以外） |
+| 実行前の拒否：許可外のパッケージやバージョン、許可したパスの外のファイルの import、`jsr:` や URL の import、存在しないパッケージ | 結果を返す（`exitCode: 1`、`stderr` に理由） |
+| 時間切れ、`signal` での中断 | 結果を返す（`exitCode: null`、`timedOut: true`） |
+| オプションの誤り：`code` と `entrypoint` の両方か片方もない、`workdir` がない、パスやホスト名にカンマや空白がある、予約された環境変数の名前、範囲の書式の誤り | `SandboxConfigError` を投げる |
+| 許可したパスの中に、外を指すシンボリックリンクがある | `SandboxConfigError` を投げる（置いたのはホスト側なので） |
+| 環境の問題：Deno の入手の失敗、registry に届かない | `SandboxError` を投げる |
+
+### 予約された環境変数
+
+`env` に次の名前があれば `SandboxConfigError` を投げる。どれも、ほかのオプションの保証を黙って壊すため。
+
+| 名前 | 理由 |
+|---|---|
+| `DENO_*` | `DENO_DIR` でパッケージのビューが差し替わり、`allowedPackages` が効かなくなる。ほかも Deno の動きを変える |
+| `LD_*`、`DYLD_*` | `LD_PRELOAD` などで Deno のプロセスに任意のライブラリを読み込ませ、権限の検査そのものを外せる |
+| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`（大文字と小文字） | 通信の経路が変わる |
+| `SSL_CERT_FILE`、`SSL_CERT_DIR` | TLS の検証が変わる |
+
+`env` は B（実行）の段階だけに渡し、A1 と A2 には渡さない。Deno には `--allow-env=<渡した名前>` を付ける。
+
+### 守ること（サンドボックスのコードから見て）
+
+- 読めるのは `workdir` と `readonlyPaths` だけ。書けるのは `workdir` だけ。静的な import やシンボリックリンクを経由しても同じ
+- 通信できるのは `allowedDomains` だけ。リダイレクト先も検査する
+- 見える環境変数は `env` で渡したものだけ
+- サブプロセス、FFI、システムの情報（`--allow-sys`）は使えない
+- import できる npm パッケージは `allowedPackages` とその依存だけ。実行時に決まる import や、前の実行のキャッシュでも同じ。インストールスクリプトは実行しない
+- 前の実行の変数などは残らない。残るのは `workdir` のファイルだけ
+
+### 並行して呼ぶとき
+
+`exec()` は並行して呼んでよい。パッケージのストアとビューは共有し、壊れないように作る。同じ `workdir` を並行した実行で使うときのファイルの競合は、呼ぶ側が避ける。
+
+### 使い方の例
+
+```ts
+import { exec } from "agent-code-sandbox";
+
+const result = await exec({
+  code: llmGeneratedCode,
+  workdir: `/tmp/session-${sessionId}`,
+  readonlyPaths: ["/data/uploads"],
+  allowedPackages: ["papaparse@5", "date-fns"],
+  allowedDomains: ["api.example.com"],
+  env: { API_BASE_URL: "https://api.example.com" },
+  timeoutMs: 30_000,
+});
+// LLM へは、stdout と stderr をそのまま渡せばよい
+return [result.stdout, result.stderr].filter(Boolean).join("\n");
+```
+
+### 未決のもの
+
+- Deno の入手先やキャッシュの場所を変えるための設定（今は環境変数で変える案。`exec()` のオプションには入れない）
+- `allowedDomains` の拡張（パスやメソッド単位の制御、認証ヘッダーの注入）を足すときの形
+
 ## 全体の流れ
 
 `exec()` は 1 回の実行で Deno を 2〜3 回起動する。
@@ -21,6 +147,7 @@ A1 と A2 ではユーザーのコードを実行しない。B では registry �
 - `child_process.spawn` で Deno を起動する。シェルは通さない
 - 環境変数はホストから引き継がず、次だけを渡す：`DENO_DIR`、`NO_COLOR=1`、`DENO_NO_UPDATE_CHECK=1`、`DENO_NO_PACKAGE_JSON=1`、`HOME`、`PATH`
   - Deno は `--allow-env` がなければ環境変数を読ませないが、子プロセスに秘密を渡さないこと自体を基本にする
+  - B では、これに `env` オプションの値を足し、`--allow-env=<その名前>` を付ける
   - A2 だけは registry に届くように、ホストのプロキシ設定（`HTTPS_PROXY` など）と `DENO_CERT` を渡す
 - `--no-config` と `DENO_NO_PACKAGE_JSON=1` で、作業ディレクトリに置かれた `deno.json` や `package.json` を無視する。`package.json` は `--no-config` だけでは読まれてしまうことを確かめた
 - 作業ディレクトリをカレントディレクトリにする
@@ -38,7 +165,7 @@ A1 と A2 ではユーザーのコードを実行しない。B では registry �
 
 - 標準出力と標準エラーをパイプで受け取る。上限を超えた分は先頭と末尾を残して真ん中を捨てる（後述）
 - 終了コードを返す。タイムアウトで止めたときは `exitCode: null`、`timedOut: true`
-- 結果の型（PoC）：`{ stdout, stderr, exitCode, timedOut, truncated, durationMs }`
+- 結果の型は [ExecResult](#execresult) のとおり
 
 ### 資源の制限
 
@@ -56,17 +183,19 @@ deno run
   --allow-read=<作業ディレクトリ>,<読み取り専用パス...>
   --allow-write=<作業ディレクトリ>
   --allow-net=<許可したホスト...>        # 指定がなければ付けない（全拒否）
+  --allow-env=<env で渡した名前...>       # 指定がなければ付けない
   --v8-flags=--max-old-space-size=<MB>
   <entry>
 ```
 
-`--allow-run`、`--allow-ffi`、`--allow-sys`、`--allow-env`、`--allow-all`、`--allow-scripts` は付けない。
+`--allow-run`、`--allow-ffi`、`--allow-sys`、`--allow-all`、`--allow-scripts`、名前を絞らない `--allow-env` は付けない。
 
 Deno は権限のリストをカンマで区切るので、パスやホスト名にカンマや空白があれば実行前に拒否する（`/tmp/a,/etc` が `/etc` の許可になるのを防ぐ）。
 
 ### Deno の入手
 
-- 初回の実行時に、固定したバージョンの Deno をダウンロードし、SHA-256 を照合してキャッシュに置く
+- `PATH` に `deno` があればそれを使う。なければ初回の実行時に、固定したバージョンの Deno をダウンロードし、SHA-256（ライブラリに埋め込んだ値）を照合してキャッシュに置く
+- 対応する環境：Linux（x86_64 / arm64）と macOS（x86_64 / arm64）。ダウンロードは Node の標準の機能だけで行う（zip の展開も自前で行い、外部コマンドに頼らない）
 - AgentCore Runtime はコンテナのほかに、Node.js 22 のコードを zip で直接デプロイする形（`NODE_22`）も扱える。この形ではイメージに Deno を入れられないので、初回のダウンロードが必要になる
 - 別案：npm の `deno` パッケージ（OS ごとのバイナリを optionalDependencies で配る）に依存する。インストール時に入るので初回の待ちがない。どちらにするかは実装の段階で決める
 
@@ -190,6 +319,7 @@ Package "lodash" is not allowed. Allowed packages: papaparse@5
 - ファイル：「静的な import を経由しても、許可していないファイルを読めない」を加える（分かったこと 1）
 - ファイル：ホストが置いたシンボリックリンクの扱いを決める（走査して拒否するか、置かないことを利用者の責任にするか）
 - 結果：`timedOut` と `truncated` を加える
+- 環境変数：`env` オプションで、渡した名前だけを見せられるようにする（予約された名前は拒否する）
 - 非機能要件：AgentCore Runtime のコードの直接デプロイ（`NODE_22`）でも動くこと
 
 ## PoC の結果
