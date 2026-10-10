@@ -1,5 +1,7 @@
 # agent-code-sandbox
 
+[![npm](https://img.shields.io/npm/v/agent-code-sandbox)](https://www.npmjs.com/package/agent-code-sandbox)
+
 Run LLM-generated JavaScript and TypeScript safely from a Node.js AI agent.
 
 - No OS isolation features needed (namespaces, seccomp, root). Works as is inside VMs such as Amazon Bedrock AgentCore Runtime.
