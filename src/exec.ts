@@ -130,8 +130,8 @@ export async function exec(options: ExecOptions): Promise<ExecResult> {
       `--lock=${lockPath}`,
       "--frozen",
       "--no-prompt",
-      `--allow-read=${roots.join(",")}`,
-      `--allow-write=${workDir}`,
+      `--allow-read=${[...roots, ...o.readAliases].join(",")}`,
+      `--allow-write=${[workDir, ...o.writeAliases].join(",")}`,
     ];
     if (o.allowedDomains.length) args.push(`--allow-net=${o.allowedDomains.join(",")}`);
     const envNames = Object.keys(o.env);

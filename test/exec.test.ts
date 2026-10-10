@@ -147,6 +147,21 @@ describe("files", () => {
     assert.equal(fs.existsSync(path.join(outside, "x.txt")), false);
   });
 
+  test("directories given through a symlink can be used by that path", async () => {
+    // Like /var -> /private/var on macOS: the code uses the path the developer gave.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "acs-alias-"));
+    fs.symlinkSync(outside, path.join(base, "ro"));
+    fs.symlinkSync(newWorkDir(), path.join(base, "wd"));
+    const ro = path.join(base, "ro");
+    const wd = path.join(base, "wd");
+    const code = `
+      console.log(await Deno.readTextFile(${JSON.stringify(path.join(ro, "secret.txt"))}));
+      await Deno.writeTextFile(${JSON.stringify(path.join(wd, "a.txt"))}, "x");`;
+    const r = await exec({ code, workDir: wd, readOnlyDirs: [ro] });
+    assert.equal(r.stdout, "TOP-SECRET\n", r.stderr);
+    assert.equal(r.exitCode, 0, r.stderr);
+  });
+
   test("static imports of files outside the allowed directories are rejected before running", async () => {
     // Deno loads static imports without --allow-read checks, so this must be caught in phase A.
     for (const code of [

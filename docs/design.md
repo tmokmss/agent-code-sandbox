@@ -210,6 +210,8 @@ deno run
 
 `--allow-run`、`--allow-ffi`、`--allow-sys`、`--allow-all`、`--allow-scripts`、名前を絞らない `--allow-env` は付けない。
 
+`--allow-read` と `--allow-write` には、実体のパスと開発者が書いたパスの両方を渡す。Deno はコードが使ったパスをシンボリックリンクを解決せずに検査するので、macOS の `/var`（実体は `/private/var`）のように、書いたパスで読めなくなるのを防ぐ。
+
 Deno は権限のリストをカンマで区切るので、パスやホスト名にカンマや空白があれば実行前に拒否する（`/tmp/a,/etc` が `/etc` の許可になるのを防ぐ）。
 
 ### Deno の入手

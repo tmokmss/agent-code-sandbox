@@ -52,7 +52,15 @@ export type NormalizedOptions = {
   entrypoint?: string;
   /** Real path. undefined when a temporary directory should be created. */
   workDir?: string;
+  /** Real paths. */
   readOnlyDirs: string[];
+  /**
+   * The directories as the developer wrote them, when they differ from the real paths (for
+   * example /var/... on macOS, which is /private/var/...). Deno checks permissions on the path
+   * the code uses without resolving symlinks, so both spellings are allowed.
+   */
+  readAliases: string[];
+  writeAliases: string[];
   allowedPackages?: AllowedPackage[];
   allowedDomains: string[];
   env: Record<string, string>;
@@ -82,7 +90,7 @@ function checkListItem(kind: string, value: string): void {
   }
 }
 
-function directory(kind: string, p: unknown): string {
+function directory(kind: string, p: unknown, aliases: string[]): string {
   if (typeof p !== "string" || p === "") throw new SandboxConfigError(`${kind} must be a non-empty string.`);
   let real: string;
   try {
@@ -92,6 +100,11 @@ function directory(kind: string, p: unknown): string {
   }
   if (!fs.statSync(real).isDirectory()) throw new SandboxConfigError(`${kind} is not a directory: ${p}`);
   checkListItem(kind, real);
+  const given = path.resolve(p);
+  if (given !== real) {
+    checkListItem(kind, given);
+    aliases.push(given);
+  }
   return real;
 }
 
@@ -116,8 +129,10 @@ export function normalizeOptions(options: ExecOptions): NormalizedOptions {
     if (o.workDir === undefined) throw new SandboxConfigError("workDir is required with entrypoint.");
   }
 
-  const workDir = o.workDir === undefined ? undefined : directory("workDir", o.workDir);
-  const readOnlyDirs = (o.readOnlyDirs ?? []).map((d) => directory("readOnlyDirs", d));
+  const writeAliases: string[] = [];
+  const readOnlyAliases: string[] = [];
+  const workDir = o.workDir === undefined ? undefined : directory("workDir", o.workDir, writeAliases);
+  const readOnlyDirs = (o.readOnlyDirs ?? []).map((d) => directory("readOnlyDirs", d, readOnlyAliases));
 
   const allowedDomains = [...(o.allowedDomains ?? [])];
   for (const d of allowedDomains) {
@@ -149,6 +164,8 @@ export function normalizeOptions(options: ExecOptions): NormalizedOptions {
     entrypoint: o.entrypoint as string | undefined,
     workDir,
     readOnlyDirs,
+    readAliases: [...writeAliases, ...readOnlyAliases],
+    writeAliases,
     allowedPackages,
     allowedDomains,
     env,
