@@ -20,7 +20,6 @@ export function exec(options: ExecOptions): Promise<ExecResult>;
 
 ```ts
 type CommonOptions = {
-  workDir: string;
   readOnlyDirs?: string[];
   allowedPackages?: string[];
   allowedDomains?: string[];
@@ -33,16 +32,17 @@ type CommonOptions = {
 
 // code と entrypoint は、どちらか一方だけを必ず指定する。
 // 両方を書いたり、どちらも書かなかったりすると型エラーになる。
+// workDir は、code のときは省略でき、entrypoint のときは必須。
 export type ExecOptions =
-  | (CommonOptions & { code: string; entrypoint?: never })
-  | (CommonOptions & { entrypoint: string; code?: never });
+  | (CommonOptions & { code: string; workDir?: string; entrypoint?: never })
+  | (CommonOptions & { entrypoint: string; workDir: string; code?: never });
 ```
 
 | オプション | 既定値 | 意味 |
 |---|---|---|
 | `code` | なし | 実行する JS / TS のコード。`entrypoint` とどちらか一方だけを指定する。ES モジュールとして実行し、トップレベルの `await` を使える。相対 import は `workDir` から解決する |
 | `entrypoint` | なし | `workDir` の中のファイルのパス（`workDir` からの相対パス、または `workDir` の中を指す絶対パス）。`code` とどちらか一方だけを指定する |
-| `workDir` | 必須 | 作業ディレクトリ。存在している必要がある。サンドボックスのコードは読み書きでき、実行をまたいでファイルが残る |
+| `workDir` | `entrypoint` のときは必須。`code` のときは省略できる | 作業ディレクトリ。存在している必要がある。サンドボックスのコードは読み書きでき、実行をまたいでファイルが残る。`code` で省略したときは、実行ごとに空の一時ディレクトリを作り、終わったら消す（単発の計算などで、ファイルを残す必要がないとき） |
 | `readOnlyDirs` | `[]` | 読み取りだけを許可するディレクトリ。中のファイルとサブディレクトリを読める |
 | `allowedPackages` | 指定なし | import してよい npm パッケージ。`"name"` か `"name@range"`（範囲は `*`、`5`、`5.7`、`5.7.0`、`^5.1.0`、`~5.1.0`）。指定しないときはどのパッケージも使える。`[]` はどれも使えない。許可したパッケージの依存は自動で許可する |
 | `allowedDomains` | `[]` | 通信を許可する先。`"api.example.com"`（全ポート）、`"api.example.com:443"`、`"*.example.com"`、IP アドレス。`[]` はすべて拒否する |
@@ -83,7 +83,7 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 | コードの例外、構文の誤り、権限の拒否 | 結果を返す（`exitCode` が 0 以外） |
 | 実行前の拒否：許可外のパッケージやバージョン、許可したパスの外のファイルの import、`jsr:` や URL の import、存在しないパッケージ | 結果を返す（`exitCode: 1`、`stderr` に理由） |
 | 時間切れ、`signal` での中断 | 結果を返す（`exitCode: null`、`timedOut: true`） |
-| オプションの誤り：`code` と `entrypoint` の両方か片方もない（JS から呼んだとき）、`workDir` がないかディレクトリでない、`readOnlyDirs` にディレクトリでないものがある、パスやホスト名にカンマや空白がある、予約された環境変数の名前、範囲の書式の誤り | `SandboxConfigError` を投げる |
+| オプションの誤り：`code` と `entrypoint` の両方か片方もない、`entrypoint` なのに `workDir` がない（どちらも JS から呼んだとき）、`workDir` が存在しないかディレクトリでない、`readOnlyDirs` にディレクトリでないものがある、パスやホスト名にカンマや空白がある、予約された環境変数の名前、範囲の書式の誤り | `SandboxConfigError` を投げる |
 | 許可したパスの中に、外を指すシンボリックリンクがある | `SandboxConfigError` を投げる（置いたのはホスト側なので） |
 | 環境の問題：Deno の入手の失敗、registry に届かない | `SandboxError` を投げる |
 
@@ -106,7 +106,7 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 - 見える環境変数は `env` で渡したものだけ
 - サブプロセス、FFI、システムの情報（`--allow-sys`）は使えない
 - import できる npm パッケージは `allowedPackages` とその依存だけ。実行時に決まる import や、前の実行のキャッシュでも同じ。インストールスクリプトは実行しない
-- 前の実行の変数などは残らない。残るのは `workDir` のファイルだけ
+- 前の実行の変数などは残らない。残るのは `workDir` のファイルだけ（`workDir` を省略したときは何も残らない）
 
 ### 並行して呼ぶとき
 
@@ -115,6 +115,9 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 ### 使い方の例
 
 ```ts
+// 単発の計算。ファイルを残す必要がなければ workDir は要らない
+const { stdout } = await exec({ code: "console.log(2 ** 10)" });
+
 import { exec } from "agent-code-sandbox";
 
 const result = await exec({
