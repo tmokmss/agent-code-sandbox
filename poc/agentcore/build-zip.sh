@@ -10,7 +10,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 deno bundle --platform deno -o "$WORK/pkg/server.mjs" agentcore/server.ts
 deno bundle --platform deno -o "$WORK/pkg/sandbox.test.mjs" test/sandbox.test.ts
-cp agentcore/bootstrap.mjs "$WORK/pkg/"
+cp agentcore/bootstrap.js "$WORK/pkg/"
 echo '{"type":"module"}' > "$WORK/pkg/package.json"
 mkdir -p "$WORK/pkg/bin"
 curl -fsSL -o "$WORK/deno.zip" "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-aarch64-unknown-linux-gnu.zip"

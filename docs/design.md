@@ -205,4 +205,18 @@ Package "lodash" is not allowed. Allowed packages: papaparse@5
 
 要件の「数百 ms 以内」を満たす。
 
-- AgentCore Runtime 上での確認は、まだ行っていない。コンテナとデプロイの手順は [poc/README.md](../poc/README.md) にある
+### AgentCore Runtime 上の結果
+
+コードの直接デプロイ（`NODE_22`、us-west-2、arm64、Linux 6.1、uid 991）で、25 件すべて通った。手順は [poc/README.md](../poc/README.md) にある。
+
+- ホストのプロセスはメタデータのエンドポイント（`169.254.169.254`）に届く（IMDSv2 のトークンなしで 401 が返る）。サンドボックスのコードからは、`169.254.169.254` と `169.254.170.2` のどちらにも届かない
+- サンドボックスのコードは、環境変数、`/proc/self/environ`、`/etc/passwd`、サブプロセスのどれも使えない
+- 1 回の実行にかかる時間
+
+| 内容 | 合計 | A1 検査 | A2 取得 | B 実行 |
+|---|---|---|---|---|
+| npm を使わないコード | 約 22 ms | 6 ms | なし | 15 ms |
+| npm パッケージ 1 つ（初回、registry から取得） | 約 202 ms | 7 ms | 116 ms | 72 ms |
+| npm パッケージ 1 つ（2 回目） | 約 51 ms | 6 ms | 6 ms | 38 ms |
+
+コードの直接デプロイでは、TypeScript を `deno bundle` で JS にまとめ、arm64 の Deno のバイナリを zip に入れた。エントリーポイントの拡張子は `.js` でなければならない。

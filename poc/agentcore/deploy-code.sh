@@ -12,7 +12,7 @@ BUCKET=${CODE_BUCKET:-agent-code-sandbox-poc-$ACCOUNT-$REGION}
 KEY=agentcore/$(date +%Y%m%d%H%M%S).zip
 
 ZIP=$(./agentcore/build-zip.sh)
-aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null || {
+aws s3api head-bucket --bucket "$BUCKET" >/dev/null 2>&1 || {
   if [ "$REGION" = us-east-1 ]; then aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" >/dev/null
   else aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" --create-bucket-configuration LocationConstraint="$REGION" >/dev/null; fi
 }
@@ -31,7 +31,7 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name read-code --policy-doc
   "Version": "2012-10-17",
   "Statement": [{"Effect": "Allow", "Action": ["s3:GetObject", "s3:GetObjectVersion"], "Resource": "arn:aws:s3:::'"$BUCKET"'/*"}]}'
 
-ARTIFACT="{\"codeConfiguration\":{\"code\":{\"s3\":{\"bucket\":\"$BUCKET\",\"prefix\":\"$KEY\"}},\"runtime\":\"NODE_22\",\"entryPoint\":[\"bootstrap.mjs\"]}}"
+ARTIFACT="{\"codeConfiguration\":{\"code\":{\"s3\":{\"bucket\":\"$BUCKET\",\"prefix\":\"$KEY\"}},\"runtime\":\"NODE_22\",\"entryPoint\":[\"bootstrap.js\"]}}"
 ID=$(aws bedrock-agentcore-control list-agent-runtimes --region "$REGION" \
   --query "agentRuntimes[?agentRuntimeName=='$NAME'].agentRuntimeId | [0]" --output text)
 if [ "$ID" = "None" ] || [ -z "$ID" ]; then
