@@ -9,8 +9,6 @@ Run LLM-generated JavaScript and TypeScript safely from a Node.js AI agent.
 - npm packages are found from the `import`s in the code and downloaded on demand. You can limit them with an allowlist.
 - Each run is independent. Only the files in the working directory carry over.
 
-Under the hood, the code runs in a [Deno](https://deno.com) child process with tight permissions. You do not need to install Deno: if it is not on `PATH`, a pinned version is downloaded (and its checksum verified) on the first run.
-
 > Status: early development. The API may change before v0.1.
 
 ## Install
@@ -54,7 +52,7 @@ Specify exactly one of `code` and `entrypoint`.
 |---|---|---|
 | `code` | | JS / TS code to run as an ES module. Top-level `await` works. Relative imports resolve from `workDir`. |
 | `entrypoint` | | Path of a file in `workDir` to run. |
-| `workDir` | Required with `entrypoint`. With `code`, a temporary directory removed after the run. | Working directory. The code can read and write it, and its files stay between runs. Must exist. |
+| `workDir` | Required with `entrypoint`. With `code`, a temporary directory removed after the run. | Working directory. The code can read and write it, and its files stay between runs. If given, it must already exist. |
 | `readOnlyDirs` | `[]` | Directories the code can read. |
 | `allowedPackages` | Any package | npm packages the code may import: `"name"` or `"name@range"` (`*`, `5`, `5.7`, `5.7.0`, `^5.1.0`, `~5.1.0`). `[]` allows none. Dependencies of allowed packages are allowed automatically. |
 | `allowedDomains` | `[]` (none) | Hosts the code may connect to: `"api.example.com"` (any port), `"api.example.com:443"`, `"*.example.com"`, or an IP address. Redirects are checked too. |
@@ -109,6 +107,12 @@ These configure the library itself (not the sandboxed code):
 - Node.js 22 or later
 - Linux (x86_64, arm64) or macOS (x86_64, arm64). On other platforms, install Deno 2.9 or later yourself.
 
+## How it works
+
+The code runs in a [Deno](https://deno.com) child process with tight permissions. You do not need to install Deno: if it is not on `PATH`, a pinned version is downloaded (and its checksum verified) on the first run.
+
+Deno's future: in October 2026 the Deno team announced that they are [joining Cloudflare](https://deno.com/blog/cloudflare), with monthly fixes planned until around October 2027. Until then, this library keeps up with the latest Deno. We are also watching community forks, so that the runtime can be replaced later without changing the `exec()` API.
+
 ## Development
 
 ```sh
@@ -118,16 +122,6 @@ npm run build
 ```
 
 Design documents (in Japanese for now): [requirements](docs/requirements.md), [background](docs/background.md), [design](docs/design.md).
-
-## Release
-
-Every push to `main` is released by [semantic-release](https://github.com/semantic-release/semantic-release) (`.github/workflows/release.yml`). The version comes from the commit messages since the last tag, in [Conventional Commits](https://www.conventionalcommits.org/) style (use it for PR titles, since PRs are squash-merged):
-
-- `feat:` → minor
-- a breaking change (`feat!:` or `BREAKING CHANGE:`) → major
-- anything else (`fix:`, `docs:`, `chore:`, ...) → patch
-
-The version in `package.json` stays `0.0.0` in git. It is set only in CI, so a release adds no commits.
 
 ## License
 
