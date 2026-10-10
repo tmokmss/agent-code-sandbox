@@ -95,8 +95,7 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 |---|---|
 | `DENO_*` | `DENO_DIR` でパッケージのビューが差し替わり、`allowedPackages` が効かなくなる。ほかも Deno の動きを変える |
 | `LD_*`、`DYLD_*` | `LD_PRELOAD` などで Deno のプロセスに任意のライブラリを読み込ませ、権限の検査そのものを外せる |
-| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`（大文字と小文字） | 通信の経路が変わる |
-| `SSL_CERT_FILE`、`SSL_CERT_DIR` | TLS の検証が変わる |
+| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`（大文字と小文字） | 拡張（パス単位の制御、認証ヘッダーの注入）で、ライブラリが内蔵のプロキシを指すのに使う。開発者の値と混ざると、その制御を通らない経路ができる |
 
 `env` は B（実行）の段階だけに渡し、A1 と A2 には渡さない。Deno には `--allow-env=<渡した名前>` を付ける。
 
