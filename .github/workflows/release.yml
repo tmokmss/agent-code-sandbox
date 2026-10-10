@@ -1,0 +1,59 @@
+# Release pipeline driven by semantic-release.
+#
+# Flow:
+#   1. Every push to main runs semantic-release. It scans commits since
+#      the last v* tag.
+#   2. Bump type is derived from those commit messages (see .releaserc.json):
+#        - BREAKING CHANGE → major
+#        - feat: → minor
+#        - any other type (fix/refactor/chore/docs/...) → patch
+#   3. semantic-release bumps package.json *in CI only* (not committed back),
+#      publishes to npm with provenance, then creates the git tag and the
+#      GitHub Release with generated notes.
+#
+# npm auth: trusted publishing (OIDC). npm can only set it up for a package
+# that already exists, so the very first release uses the NPM_TOKEN secret.
+# After that, set up Trusted publishing on npmjs.com (workflow release.yml)
+# and delete the secret.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Node 24 ships an npm that supports trusted publishing.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
