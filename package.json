@@ -1,8 +1,25 @@
 {
   "name": "agent-code-sandbox",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
   "description": "Run LLM-generated JavaScript/TypeScript safely from a Node.js AI agent, without OS isolation features.",
+  "keywords": [
+    "sandbox",
+    "llm",
+    "ai-agent",
+    "code-interpreter",
+    "deno",
+    "agentcore"
+  ],
+  "license": "MIT",
+  "author": "tmokmss",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tmokmss/agent-code-sandbox.git"
+  },
+  "homepage": "https://github.com/tmokmss/agent-code-sandbox#readme",
+  "bugs": {
+    "url": "https://github.com/tmokmss/agent-code-sandbox/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,7 +30,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "engines": {
     "node": ">=22"
@@ -27,5 +45,9 @@
   "devDependencies": {
     "@types/node": "^22.18.0",
     "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

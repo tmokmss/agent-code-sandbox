@@ -11,6 +11,12 @@ Under the hood, the code runs in a [Deno](https://deno.com) child process with t
 
 > Status: early development. The API may change before v0.1.
 
+## Install
+
+```sh
+npm install agent-code-sandbox
+```
+
 ## Usage
 
 ```ts
@@ -110,3 +116,12 @@ npm run build
 ```
 
 Design documents (in Japanese for now): [requirements](docs/requirements.md), [background](docs/background.md), [design](docs/design.md).
+
+## Release
+
+1. Update `version` in `package.json` and merge it to `main`.
+2. Create a GitHub release with the tag `v<version>` (for example `v0.0.1`). The `publish` workflow tests and publishes it to npm with provenance.
+
+## License
+
+MIT
