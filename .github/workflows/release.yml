@@ -52,6 +52,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+      # semantic-release starts at 1.0.0 when there is no tag. Start at 0.0.x instead:
+      # until the first v* tag exists, mark the previous main commit as v0.0.0.
+      # The tag is local to this job and never pushed.
+      - name: Start versions at 0.0.x
+        run: |
+          if [ -z "$(git tag -l 'v*')" ]; then
+            git tag v0.0.0 "${{ github.event.before || 'HEAD^' }}"
+          fi
+
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
