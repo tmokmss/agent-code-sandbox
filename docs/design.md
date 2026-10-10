@@ -47,8 +47,8 @@ export type ExecOptions =
 | `allowedPackages` | 指定なし | import してよい npm パッケージ。`"name"` か `"name@range"`（範囲は `*`、`5`、`5.7`、`5.7.0`、`^5.1.0`、`~5.1.0`）。指定しないときはどのパッケージも使える。`[]` はどれも使えない。許可したパッケージの依存は自動で許可する |
 | `allowedDomains` | `[]` | 通信を許可する先。`"api.example.com"`（全ポート）、`"api.example.com:443"`、`"*.example.com"`、IP アドレス。`[]` はすべて拒否する |
 | `env` | `{}` | サンドボックスのコードに見せる環境変数。ここで渡した名前だけを読める。ホストの値を渡すときは `{ KEY: process.env.KEY! }` や `{ ...process.env }` のように開発者が選んで書く |
-| `timeoutMs` | `30000` | 実行時間の上限。超えたら止めて `timedOut: true` を返す。パッケージの取得の時間は含めない |
-| `memoryMb` | `512` | JS のヒープの上限 |
+| `timeoutMs` | 無制限 | 実行時間の上限。超えたら止めて `timedOut: true` を返す。パッケージの取得の時間は含めない |
+| `memoryMb` | 無制限（V8 の既定） | JS のヒープの上限。指定したときだけ `--max-old-space-size` を付ける |
 | `maxOutputBytes` | `1048576`（1 MB） | `stdout` と `stderr` のそれぞれで、ホストのメモリに溜める上限（バイト）。超えた分は先頭と末尾を半分ずつ残して真ん中を捨てる。ホストのプロセスを守るための上限で、LLM に渡す量の調整ではない（それは呼ぶ側で行う） |
 | `signal` | なし | 渡した `AbortSignal` が中断されたら、実行を止める。返り値は `timedOut` と同じ形で、`stderr` に中断したことを書く |
 
@@ -194,7 +194,7 @@ deno run
   --allow-write=<作業ディレクトリ>
   --allow-net=<許可したホスト...>        # 指定がなければ付けない（全拒否）
   --allow-env=<env で渡した名前...>       # 指定がなければ付けない
-  --v8-flags=--max-old-space-size=<MB>
+  --v8-flags=--max-old-space-size=<MB>   # memoryMb を指定したときだけ
   <entry>
 ```
 
