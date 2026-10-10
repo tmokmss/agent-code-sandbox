@@ -11,6 +11,12 @@ Under the hood, the code runs in a [Deno](https://deno.com) child process with t
 
 > Status: early development. The API may change before v0.1.
 
+## Install
+
+```sh
+npm install agent-code-sandbox
+```
+
 ## Usage
 
 ```ts
@@ -110,3 +116,17 @@ npm run build
 ```
 
 Design documents (in Japanese for now): [requirements](docs/requirements.md), [background](docs/background.md), [design](docs/design.md).
+
+## Release
+
+Every push to `main` is released by [semantic-release](https://github.com/semantic-release/semantic-release) (`.github/workflows/release.yml`). The version comes from the commit messages since the last tag, in [Conventional Commits](https://www.conventionalcommits.org/) style (use it for PR titles, since PRs are squash-merged):
+
+- `feat:` → minor
+- a breaking change (`feat!:` or `BREAKING CHANGE:`) → major
+- anything else (`fix:`, `docs:`, `chore:`, ...) → patch
+
+The version in `package.json` stays `0.0.0` in git. It is set only in CI, so a release adds no commits.
+
+## License
+
+MIT
