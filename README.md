@@ -52,7 +52,7 @@ Specify exactly one of `code` and `entrypoint`.
 |---|---|---|
 | `code` | | JS / TS code to run as an ES module. Top-level `await` works. Relative imports resolve from `workDir`. |
 | `entrypoint` | | Path of a file in `workDir` to run. |
-| `workDir` | Required with `entrypoint`. With `code`, a temporary directory removed after the run. | Working directory. The code can read and write it, and its files stay between runs. Must exist. |
+| `workDir` | Required with `entrypoint`. With `code`, a temporary directory removed after the run. | Working directory. The code can read and write it, and its files stay between runs. If you pass it, the directory must already exist (it is not created for you). |
 | `readOnlyDirs` | `[]` | Directories the code can read. |
 | `allowedPackages` | Any package | npm packages the code may import: `"name"` or `"name@range"` (`*`, `5`, `5.7`, `5.7.0`, `^5.1.0`, `~5.1.0`). `[]` allows none. Dependencies of allowed packages are allowed automatically. |
 | `allowedDomains` | `[]` (none) | Hosts the code may connect to: `"api.example.com"` (any port), `"api.example.com:443"`, `"*.example.com"`, or an IP address. Redirects are checked too. |
