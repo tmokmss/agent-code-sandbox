@@ -37,7 +37,8 @@ const result = await exec({
   code: "...",                         // JS / TS
   packages: ["papaparse@5"],           // 使う npm パッケージ
   allowedDomains: ["api.example.com"], // 通信を許可する先
-  workdir: "/tmp/session-123",         // 実行をまたいで共有する作業ディレクトリ
+  workdir: "/tmp/session-123",         // 実行をまたいで共有する作業ディレクトリ（読み書きできる）
+  readonlyPaths: ["/data/uploads"],    // 読み取りだけ許可するパス
   tools: { searchOrders },             // サンドボックスから呼べるホストの関数
   timeoutMs: 30_000,
 });
@@ -73,7 +74,9 @@ const result = await exec({
 
 ### ファイル
 
-- 作業ディレクトリの中だけを読み書きできる
+- 書き込めるのは作業ディレクトリの中だけ
+- 作業ディレクトリのほかに、読み取りだけを許可するパスを指定できる（入力データや参照用のドキュメントを、コピーせずに見せるため）
+- シンボリックリンクなどを経由して、許可していないパスに届かない
 - 作業ディレクトリは実行をまたいで共有でき、ホストから直接ファイルを置いたり取り出したりできる
 
 ### ネットワーク
