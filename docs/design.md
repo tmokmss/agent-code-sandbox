@@ -97,7 +97,7 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 | `LD_*`、`DYLD_*` | `LD_PRELOAD` などで Deno のプロセスに任意のライブラリを読み込ませ、権限の検査そのものを外せる |
 | `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`（大文字と小文字） | 拡張（パス単位の制御、認証ヘッダーの注入）で、ライブラリが内蔵のプロキシを指すのに使う。開発者の値と混ざると、その制御を通らない経路ができる |
 
-`env` は B（実行）の段階だけに渡し、A1 と A2 には渡さない。Deno には `--allow-env=<渡した名前>` を付ける。
+`env` は B（実行）の段階だけに渡し、A1 と A2 には渡さない。Deno には `--allow-env=<渡した名前>` と `--ignore-env` を付ける。`--ignore-env` で、渡していない名前は例外にならず `undefined` を返す（Node と同じ）。これがないと `process.env.X ?? "既定値"` や `JSON.stringify(process.env)` が権限エラーで落ちる。
 
 ### 守ること（サンドボックスのコードから見て）
 
@@ -133,9 +133,18 @@ const result = await exec({
 return [result.stdout, result.stderr].filter(Boolean).join("\n");
 ```
 
+### ライブラリの設定（環境変数）
+
+Deno の入手先やキャッシュの場所は、`exec()` のオプションではなく環境変数で変える。
+
+| 名前 | 意味 |
+|---|---|
+| `AGENT_CODE_SANDBOX_DENO_PATH` | 使う Deno のパス |
+| `AGENT_CODE_SANDBOX_DENO_BASE_URL` | Deno のダウンロード元（GitHub の releases のミラー）。SHA-256 の照合はそのまま行う |
+| `AGENT_CODE_SANDBOX_CACHE_DIR` | Deno と npm パッケージのキャッシュの場所。既定は `~/.cache/agent-code-sandbox`。書き込めなければ一時ディレクトリを使う（AgentCore Runtime のコードの直接デプロイでは、ホームに書けないことがあるため） |
+
 ### 未決のもの
 
-- Deno の入手先やキャッシュの場所を変えるための設定（今は環境変数で変える案。`exec()` のオプションには入れない）
 - `allowedDomains` の拡張（パスやメソッド単位の制御、認証ヘッダーの注入）を足すときの形
 
 ## 全体の流れ
@@ -194,11 +203,14 @@ deno run
   --allow-write=<作業ディレクトリ>
   --allow-net=<許可したホスト...>        # 指定がなければ付けない（全拒否）
   --allow-env=<env で渡した名前...>       # 指定がなければ付けない
+  --ignore-env                           # 渡していない名前は undefined を返す
   --v8-flags=--max-old-space-size=<MB>   # memoryMb を指定したときだけ
   <entry>
 ```
 
 `--allow-run`、`--allow-ffi`、`--allow-sys`、`--allow-all`、`--allow-scripts`、名前を絞らない `--allow-env` は付けない。
+
+`--allow-read` と `--allow-write` には、実体のパスと開発者が書いたパスの両方を渡す。Deno はコードが使ったパスをシンボリックリンクを解決せずに検査するので、macOS の `/var`（実体は `/private/var`）のように、書いたパスで読めなくなるのを防ぐ。
 
 Deno は権限のリストをカンマで区切るので、パスやホスト名にカンマや空白があれば実行前に拒否する（`/tmp/a,/etc` が `/etc` の許可になるのを防ぐ）。
 
@@ -207,7 +219,8 @@ Deno は権限のリストをカンマで区切るので、パスやホスト名
 - `PATH` に `deno` があればそれを使う。なければ初回の実行時に、固定したバージョンの Deno をダウンロードし、SHA-256（ライブラリに埋め込んだ値）を照合してキャッシュに置く
 - 対応する環境：Linux（x86_64 / arm64）と macOS（x86_64 / arm64）。ダウンロードは Node の標準の機能だけで行う（zip の展開も自前で行い、外部コマンドに頼らない）
 - AgentCore Runtime はコンテナのほかに、Node.js 22 のコードを zip で直接デプロイする形（`NODE_22`）も扱える。この形ではイメージに Deno を入れられないので、初回のダウンロードが必要になる
-- 別案：npm の `deno` パッケージ（OS ごとのバイナリを optionalDependencies で配る）に依存する。インストール時に入るので初回の待ちがない。どちらにするかは実装の段階で決める
+- ダウンロードは Node の `https` で行い、`HTTPS_PROXY` と `NO_PROXY` を見る（Node の `fetch` は `NODE_USE_ENV_PROXY` がないとプロキシを使わないため）
+- 実装ではダウンロードを採った。別案は npm の `deno` パッケージ（OS ごとのバイナリを optionalDependencies で配る）に依存すること。インストール時に入るので初回の待ちはないが、依存が増え、パッケージの入れ方（`--omit=optional` など）で入らないことがある
 
 ## パッケージの許可リストの検査
 
