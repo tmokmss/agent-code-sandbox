@@ -14,7 +14,7 @@ const root = path.resolve(import.meta.dirname, "..");
 
 async function selftest() {
   return await new Promise<{ exitCode: number | null; summary: string; failures: string }>((resolve) => {
-    const child = spawn(process.execPath, ["--test", "--test-concurrency=1", "test/sandbox.test.ts"], { cwd: root, env: process.env });
+    const child = spawn(process.execPath, ["--test", "--test-concurrency=1", process.env.SANDBOX_SELFTEST_FILE ?? "test/sandbox.test.ts"], { cwd: root, env: process.env });
     let out = "";
     child.stdout.on("data", (c) => (out += c));
     child.stderr.on("data", (c) => (out += c));

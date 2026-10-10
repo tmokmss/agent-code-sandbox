@@ -22,11 +22,14 @@ The tests download `papaparse` and `lodash` from registry.npmjs.org.
 - `{"action": "probe"}` shows what the host process sees (AWS env var names, metadata endpoint) and what the sandboxed code sees
 - `{"code": "...", "allowedDomains": [...], ...}` runs `exec()` once
 
-Needs AWS credentials (ECR, IAM, bedrock-agentcore), docker with buildx for linux/arm64, and AWS CLI v2.
+Two ways to deploy. Both need AWS credentials and AWS CLI v2.
+
+- Direct code deployment (`NODE_22`, no docker): `agentcore/deploy-code.sh`. It bundles the TypeScript into plain JS with `deno bundle`, adds the arm64 Deno binary, uploads the zip to S3, and creates the runtime. Needs S3, IAM, and bedrock-agentcore permissions.
+- Container: `agentcore/deploy.sh`. Needs docker with buildx for linux/arm64, and ECR, IAM, and bedrock-agentcore permissions.
 
 ```sh
 cd poc
-AWS_REGION=us-west-2 ./agentcore/deploy.sh          # prints the runtime ARN
+AWS_REGION=us-west-2 ./agentcore/deploy-code.sh     # prints the runtime ARN
 ./agentcore/invoke.sh <runtime-arn> '{"action":"probe"}'
 ./agentcore/invoke.sh <runtime-arn> '{"action":"selftest"}'
 ```
