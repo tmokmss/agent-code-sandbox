@@ -14,12 +14,14 @@ export function exec(options: ExecOptions): Promise<ExecResult>;
 
 ### ExecOptions
 
+`code` と `entrypoint` は union にして、どちらか一方だけを型で強制する。呼び出しの形は平らなまま（`exec({ code, workDir })`）で、入れ子にしない。実行時にも同じ検査をする（JS から呼ばれる場合のため）。
+
+名前は、ディレクトリを指すものを `workDir` と `readOnlyDirs` にそろえる。読み取り専用はディレクトリだけにする。ファイル 1 つだけを見せたいときは、それを入れたディレクトリを指定する。
+
 ```ts
-export type ExecOptions = {
-  code?: string;
-  entrypoint?: string;
-  workdir: string;
-  readonlyPaths?: string[];
+type CommonOptions = {
+  workDir: string;
+  readOnlyDirs?: string[];
   allowedPackages?: string[];
   allowedDomains?: string[];
   env?: Record<string, string>;
@@ -28,20 +30,26 @@ export type ExecOptions = {
   maxOutputBytes?: number;
   signal?: AbortSignal;
 };
+
+// code と entrypoint は、どちらか一方だけを必ず指定する。
+// 両方を書いたり、どちらも書かなかったりすると型エラーになる。
+export type ExecOptions =
+  | (CommonOptions & { code: string; entrypoint?: never })
+  | (CommonOptions & { entrypoint: string; code?: never });
 ```
 
 | オプション | 既定値 | 意味 |
 |---|---|---|
-| `code` | なし | 実行する JS / TS のコード。`entrypoint` とどちらか一方だけを指定する。ES モジュールとして実行し、トップレベルの `await` を使える。相対 import は `workdir` から解決する |
-| `entrypoint` | なし | `workdir` の中のファイルのパス（`workdir` からの相対パス、または `workdir` の中を指す絶対パス）。`code` とどちらか一方だけを指定する |
-| `workdir` | 必須 | 作業ディレクトリ。存在している必要がある。サンドボックスのコードは読み書きでき、実行をまたいでファイルが残る |
-| `readonlyPaths` | `[]` | 読み取りだけを許可するパス（ディレクトリかファイル） |
+| `code` | なし | 実行する JS / TS のコード。`entrypoint` とどちらか一方だけを指定する。ES モジュールとして実行し、トップレベルの `await` を使える。相対 import は `workDir` から解決する |
+| `entrypoint` | なし | `workDir` の中のファイルのパス（`workDir` からの相対パス、または `workDir` の中を指す絶対パス）。`code` とどちらか一方だけを指定する |
+| `workDir` | 必須 | 作業ディレクトリ。存在している必要がある。サンドボックスのコードは読み書きでき、実行をまたいでファイルが残る |
+| `readOnlyDirs` | `[]` | 読み取りだけを許可するディレクトリ。中のファイルとサブディレクトリを読める |
 | `allowedPackages` | 指定なし | import してよい npm パッケージ。`"name"` か `"name@range"`（範囲は `*`、`5`、`5.7`、`5.7.0`、`^5.1.0`、`~5.1.0`）。指定しないときはどのパッケージも使える。`[]` はどれも使えない。許可したパッケージの依存は自動で許可する |
 | `allowedDomains` | `[]` | 通信を許可する先。`"api.example.com"`（全ポート）、`"api.example.com:443"`、`"*.example.com"`、IP アドレス。`[]` はすべて拒否する |
 | `env` | `{}` | サンドボックスのコードに見せる環境変数。ここで渡した名前だけを読める。ホストの値を渡すときは `{ KEY: process.env.KEY! }` や `{ ...process.env }` のように開発者が選んで書く |
 | `timeoutMs` | `30000` | 実行時間の上限。超えたら止めて `timedOut: true` を返す。パッケージの取得の時間は含めない |
 | `memoryMb` | `512` | JS のヒープの上限 |
-| `maxOutputBytes` | `20000` | `stdout` と `stderr` のそれぞれの上限（バイト）。超えた分は先頭と末尾を半分ずつ残して真ん中を捨てる |
+| `maxOutputBytes` | `1048576`（1 MB） | `stdout` と `stderr` のそれぞれで、ホストのメモリに溜める上限（バイト）。超えた分は先頭と末尾を半分ずつ残して真ん中を捨てる。ホストのプロセスを守るための上限で、LLM に渡す量の調整ではない（それは呼ぶ側で行う） |
 | `signal` | なし | 渡した `AbortSignal` が中断されたら、実行を止める。返り値は `timedOut` と同じ形で、`stderr` に中断したことを書く |
 
 ### ExecResult
@@ -75,7 +83,7 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 | コードの例外、構文の誤り、権限の拒否 | 結果を返す（`exitCode` が 0 以外） |
 | 実行前の拒否：許可外のパッケージやバージョン、許可したパスの外のファイルの import、`jsr:` や URL の import、存在しないパッケージ | 結果を返す（`exitCode: 1`、`stderr` に理由） |
 | 時間切れ、`signal` での中断 | 結果を返す（`exitCode: null`、`timedOut: true`） |
-| オプションの誤り：`code` と `entrypoint` の両方か片方もない、`workdir` がない、パスやホスト名にカンマや空白がある、予約された環境変数の名前、範囲の書式の誤り | `SandboxConfigError` を投げる |
+| オプションの誤り：`code` と `entrypoint` の両方か片方もない（JS から呼んだとき）、`workDir` がないかディレクトリでない、`readOnlyDirs` にディレクトリでないものがある、パスやホスト名にカンマや空白がある、予約された環境変数の名前、範囲の書式の誤り | `SandboxConfigError` を投げる |
 | 許可したパスの中に、外を指すシンボリックリンクがある | `SandboxConfigError` を投げる（置いたのはホスト側なので） |
 | 環境の問題：Deno の入手の失敗、registry に届かない | `SandboxError` を投げる |
 
@@ -94,16 +102,16 @@ LLM が直せるものは結果として返し、開発者が直すものは例�
 
 ### 守ること（サンドボックスのコードから見て）
 
-- 読めるのは `workdir` と `readonlyPaths` だけ。書けるのは `workdir` だけ。静的な import やシンボリックリンクを経由しても同じ
+- 読めるのは `workDir` と `readOnlyDirs` だけ。書けるのは `workDir` だけ。静的な import やシンボリックリンクを経由しても同じ
 - 通信できるのは `allowedDomains` だけ。リダイレクト先も検査する
 - 見える環境変数は `env` で渡したものだけ
 - サブプロセス、FFI、システムの情報（`--allow-sys`）は使えない
 - import できる npm パッケージは `allowedPackages` とその依存だけ。実行時に決まる import や、前の実行のキャッシュでも同じ。インストールスクリプトは実行しない
-- 前の実行の変数などは残らない。残るのは `workdir` のファイルだけ
+- 前の実行の変数などは残らない。残るのは `workDir` のファイルだけ
 
 ### 並行して呼ぶとき
 
-`exec()` は並行して呼んでよい。パッケージのストアとビューは共有し、壊れないように作る。同じ `workdir` を並行した実行で使うときのファイルの競合は、呼ぶ側が避ける。
+`exec()` は並行して呼んでよい。パッケージのストアとビューは共有し、壊れないように作る。同じ `workDir` を並行した実行で使うときのファイルの競合は、呼ぶ側が避ける。
 
 ### 使い方の例
 
@@ -112,8 +120,8 @@ import { exec } from "agent-code-sandbox";
 
 const result = await exec({
   code: llmGeneratedCode,
-  workdir: `/tmp/session-${sessionId}`,
-  readonlyPaths: ["/data/uploads"],
+  workDir: `/tmp/session-${sessionId}`,
+  readOnlyDirs: ["/data/uploads"],
   allowedPackages: ["papaparse@5", "date-fns"],
   allowedDomains: ["api.example.com"],
   env: { API_BASE_URL: "https://api.example.com" },
@@ -180,7 +188,7 @@ deno run
   --no-config --no-remote --cached-only
   --lock=<実行ごとのロック> --frozen
   --no-prompt
-  --allow-read=<作業ディレクトリ>,<読み取り専用パス...>
+  --allow-read=<作業ディレクトリ>,<読み取り専用ディレクトリ...>
   --allow-write=<作業ディレクトリ>
   --allow-net=<許可したホスト...>        # 指定がなければ付けない（全拒否）
   --allow-env=<env で渡した名前...>       # 指定がなければ付けない
@@ -223,7 +231,7 @@ PoC の前に、Deno の権限がどこまで効くかを試した。許可リ�
 
 `deno info --json --no-npm --no-remote` で、通信せずに静的な import をすべて列挙する。次のどれかに当てはまらなければ、実行前にエラーにする。
 
-- `file:`：実体（`realpath`）が作業ディレクトリか読み取り専用パスの中にある（分かったこと 1 への対策）
+- `file:`：実体（`realpath`）が作業ディレクトリか読み取り専用ディレクトリの中にある（分かったこと 1 への対策）
 - `npm:`：許可リストにあるパッケージ名（許可リストを指定しないときはすべて可）
 - `node:`（組み込みモジュール）、`data:`（インラインのモジュール。その中の import もグラフに含まれて検査される）
 
@@ -308,7 +316,11 @@ Package "lodash" is not allowed. Allowed packages: papaparse@5
 
 ### 4. 出力が上限を超えたら切り詰める
 
-**賛成。** 先頭と末尾を半分ずつ残し、真ん中を捨てる。エラーは最後に出ることが多いので、末尾を残すのが大事。捨てたところには、捨てたバイト数と「大きな出力はファイルに書くこと」という案内を入れる。上限は stdout と stderr それぞれに適用し、既定値は 20 KB 程度から始める（LLM のコンテキストを守るため）。
+**賛成。ただし目的は、LLM のコンテキストではなく、ホストのプロセスを守ること。** 上限がないと、`while (true) console.log(...)` のようなコードの出力を、返すまでホストのメモリにすべて溜めることになり、エージェントのプロセスが落ちる（脅威モデルの「ホストの可用性」）。なので、受け取りながら切り詰める仕組みはライブラリに要る。既定値は大きめ（1 MB）にする。
+
+LLM に渡す量をどこまで絞るかは、モデルや用途で変わるので呼ぶ側で行う。ライブラリの上限より小さく絞りたいときも、`maxOutputBytes` を小さくすれば同じ形で切り詰められる。
+
+切り詰めるときは、先頭と末尾を半分ずつ残し、真ん中を捨てる。エラーは最後に出ることが多いので、末尾を残すのが大事。捨てたところには、捨てたバイト数と「大きな出力はファイルに書くこと」という案内を入れる。
 
 ### 文書の言語
 
