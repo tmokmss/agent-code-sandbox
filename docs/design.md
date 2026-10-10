@@ -1,6 +1,6 @@
 # 設計（ドラフト）
 
-要件（[requirements.md](requirements.md)）と背景（[background.md](background.md)）をもとにした設計。PoC（[poc/](../poc/)）で確かめた内容を含む。Deno のバージョンは 2.9.7 で確かめた。
+要件（[requirements.md](requirements.md)）と背景（[background.md](background.md)）をもとにした設計。PoC で確かめた内容を含む。PoC のコードはブランチ [claude/poc-deno-agentcore](https://github.com/tmokmss/agent-code-sandbox/tree/claude/poc-deno-agentcore/poc) に残してある（マージはしない）。Deno のバージョンは 2.9.7 で確かめた。
 
 ## 全体の流れ
 
@@ -194,7 +194,7 @@ Package "lodash" is not allowed. Allowed packages: papaparse@5
 
 ## PoC の結果
 
-- 実装：[poc/src/exec.ts](../poc/src/exec.ts)。テスト：[poc/test/sandbox.test.ts](../poc/test/sandbox.test.ts)（25 件）
+- 実装：[poc/src/exec.ts](https://github.com/tmokmss/agent-code-sandbox/blob/claude/poc-deno-agentcore/poc/src/exec.ts)。テスト：[poc/test/sandbox.test.ts](https://github.com/tmokmss/agent-code-sandbox/blob/claude/poc-deno-agentcore/poc/test/sandbox.test.ts)（25 件）
 - 環境：Firecracker の microVM（Linux 6.18、x86_64）。root（uid 0）と、root でないユーザー（uid 65534）の両方で、25 件すべて通った。OS の分離機構は使っていない
 - 1 回の実行にかかる時間（キャッシュが効いている状態）
 
@@ -207,7 +207,7 @@ Package "lodash" is not allowed. Allowed packages: papaparse@5
 
 ### AgentCore Runtime 上の結果
 
-コードの直接デプロイ（`NODE_22`、us-west-2、arm64、Linux 6.1、uid 991）で、25 件すべて通った。手順は [poc/README.md](../poc/README.md) にある。
+コードの直接デプロイ（`NODE_22`、us-west-2、arm64、Linux 6.1、uid 991）で、25 件すべて通った。手順は [poc/README.md](https://github.com/tmokmss/agent-code-sandbox/blob/claude/poc-deno-agentcore/poc/README.md) にある。
 
 - ホストのプロセスはメタデータのエンドポイント（`169.254.169.254`）に届く（IMDSv2 のトークンなしで 401 が返る）。サンドボックスのコードからは、`169.254.169.254` と `169.254.170.2` のどちらにも届かない
 - サンドボックスのコードは、環境変数、`/proc/self/environ`、`/etc/passwd`、サブプロセスのどれも使えない
