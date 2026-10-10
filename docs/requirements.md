@@ -33,7 +33,8 @@ API のイメージ（名前や形は設計で決める）：
 
 ```ts
 const result = await exec({
-  code: "...",                         // JS / TS
+  code: "...",                         // JS / TS のコード。entrypoint とどちらか一方を指定する
+  entrypoint: "main.ts",               // 作業ディレクトリ内のファイルを実行する場合
   packages: ["papaparse@5"],           // 使う npm パッケージ
   allowedDomains: ["api.example.com"], // 通信を許可する先
   workdir: "/tmp/session-123",         // 実行をまたいで共有する作業ディレクトリ（読み書きできる）
@@ -59,7 +60,10 @@ const result = await exec({
 
 ### 実行
 
-- JavaScript / TypeScript のコードを文字列で受け取って実行できる
+- JavaScript / TypeScript のコードを、次のどちらかの形で受け取って実行できる
+  - コードの文字列
+  - 作業ディレクトリ内のファイルのパス。LLM がエージェントのファイル編集ツールでコードを書いて直し、実行だけを `exec` で行う使い方を想定する
+- 実行するコードから、作業ディレクトリ内のほかのファイルを相対パスで import できる
 - 標準出力・標準エラー・終了コードを返す
 - エラー時は、LLM が直せるだけの情報（例外のメッセージ、行番号）を標準エラーに出す
 
